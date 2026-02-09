@@ -60,7 +60,7 @@
             z-index: 1;
         }
         /* Image Modal Animation */
-        #image-modal.open {
+        #image-modal.open, #favorites-modal.open {
             display: flex;
             animation: fadeIn 0.3s ease-out forwards;
         }
@@ -70,6 +70,19 @@
         }
         #image-modal.open img {
             transform: scale(1);
+        }
+        /* Heart Animation */
+        @keyframes heartBeat {
+            0% { transform: scale(1); }
+            25% { transform: scale(1.2); }
+            50% { transform: scale(1); }
+            75% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .heart-active {
+            fill: #ef4444;
+            color: #ef4444;
+            animation: heartBeat 0.4s ease-in-out;
         }
     </style>
 </head>
@@ -87,9 +100,17 @@
                         </div>
                         <span class="text-lg tracking-tight">หาเพื่อนเที่ยว</span>
                     </h1>
-                    <button onclick="fetchPostsFromGAS()" class="bg-gray-100 hover:bg-blue-50 text-gray-500 hover:text-blue-600 p-2 rounded-full transition-colors">
-                        <i data-lucide="refresh-cw" width="18"></i>
-                    </button>
+                    <div class="flex gap-2">
+                        <!-- Favorites Button -->
+                        <button onclick="showFavorites()" class="bg-gray-100 hover:bg-pink-50 text-gray-500 hover:text-pink-500 p-2 rounded-full transition-colors relative">
+                            <i data-lucide="heart" width="18"></i>
+                            <span id="fav-badge" class="hidden absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                        </button>
+                        <!-- Refresh Button -->
+                        <button onclick="fetchPostsFromGAS()" class="bg-gray-100 hover:bg-blue-50 text-gray-500 hover:text-blue-600 p-2 rounded-full transition-colors">
+                            <i data-lucide="refresh-cw" width="18"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="flex gap-2 mb-3">
@@ -300,6 +321,23 @@
         <img id="modal-image" src="" class="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl" onclick="event.stopPropagation()">
     </div>
 
+    <!-- Favorites Modal -->
+    <div id="favorites-modal" class="fixed inset-0 z-50 bg-black/50 hidden flex flex-col justify-end md:justify-center items-center p-0 md:p-4 backdrop-blur-sm" onclick="closeFavoritesModal()">
+        <div class="bg-white w-full max-w-md h-[80vh] md:h-auto md:max-h-[80vh] rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onclick="event.stopPropagation()">
+            <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="heart" class="text-red-500 fill-red-500" width="20"></i> รายการโปรด
+                </h2>
+                <button onclick="closeFavoritesModal()" class="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
+                    <i data-lucide="x" width="20"></i>
+                </button>
+            </div>
+            <div id="favorites-list" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                <!-- Favorites content injected here -->
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript Logic -->
     <script>
         // --- CONFIG ---
@@ -317,7 +355,8 @@
             searchTerm: '',
             selectedPost: null,
             currentPage: 1,
-            itemsPerPage: 5
+            itemsPerPage: 5,
+            favorites: JSON.parse(localStorage.getItem('travel_favorites') || '[]')
         };
 
         const travelFilters = [
@@ -361,6 +400,100 @@
                 document.getElementById('modal-image').src = '';
                 document.body.style.overflow = ''; 
             }, 300); 
+        }
+
+        // --- FAVORITES FUNCTIONS ---
+        function toggleFavorite(e, postId) {
+            e.stopPropagation();
+            const post = posts.find(p => p.id == postId) || state.favorites.find(p => p.id == postId);
+            if (!post) return;
+
+            const index = state.favorites.findIndex(p => p.id == postId);
+            if (index === -1) {
+                state.favorites.push(post);
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top',
+                    showConfirmButton: false,
+                    timer: 1500,
+                    timerProgressBar: false,
+                    didOpen: (toast) => {
+                        toast.addEventListener('mouseenter', Swal.stopTimer)
+                        toast.addEventListener('mouseleave', Swal.resumeTimer)
+                    }
+                })
+                Toast.fire({
+                    icon: 'success',
+                    title: 'เพิ่มในรายการโปรดแล้ว'
+                })
+            } else {
+                state.favorites.splice(index, 1);
+            }
+            localStorage.setItem('travel_favorites', JSON.stringify(state.favorites));
+            
+            // Update UI
+            updateFavoriteBadge();
+            renderHome(); 
+            if (!document.getElementById('favorites-modal').classList.contains('hidden')) {
+                renderFavoritesList();
+            }
+        }
+
+        function updateFavoriteBadge() {
+            const badge = document.getElementById('fav-badge');
+            if (state.favorites.length > 0) {
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function showFavorites() {
+            const modal = document.getElementById('favorites-modal');
+            modal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                modal.classList.add('open');
+            });
+            renderFavoritesList();
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeFavoritesModal() {
+            const modal = document.getElementById('favorites-modal');
+            modal.classList.remove('open');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        function renderFavoritesList() {
+            const list = document.getElementById('favorites-list');
+            if (state.favorites.length === 0) {
+                list.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10 text-gray-400 gap-3">
+                        <i data-lucide="heart-off" width="48" class="opacity-20"></i>
+                        <p>ไม่มีรายการโปรด</p>
+                    </div>
+                `;
+            } else {
+                list.innerHTML = state.favorites.map(post => `
+                    <div onclick="selectPost('${post.id}'); closeFavoritesModal();" class="flex gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm cursor-pointer active:scale-[0.98] transition-all">
+                        <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 relative">
+                            <img src="${post.image}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0 flex flex-col justify-center">
+                            <h4 class="font-bold text-gray-800 text-sm line-clamp-1 mb-1">${post.driverName}</h4>
+                            <p class="text-xs text-gray-500 mb-1 flex items-center gap-1"><i data-lucide="map-pin" width="12"></i> ${post.province}</p>
+                            <p class="text-sm font-bold text-blue-600">฿${post.price}</p>
+                        </div>
+                        <button onclick="toggleFavorite(event, '${post.id}')" class="self-start text-red-500 p-1">
+                            <i data-lucide="trash-2" width="18"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+            lucide.createIcons();
         }
 
         // --- ROUTER ---
@@ -426,7 +559,9 @@
                         </div>
                     `;
                 } else {
-                    contentHtml = paginatedPosts.map(post => `
+                    contentHtml = paginatedPosts.map(post => {
+                        const isFav = state.favorites.some(p => p.id == post.id);
+                        return `
                         <div onclick="selectPost('${post.id}')" class="group bg-white rounded-2xl shadow-sm hover:shadow-md border border-gray-100 overflow-hidden active:scale-[0.99] transition-all cursor-pointer fade-in">
                             <div class="h-44 overflow-hidden relative">
                                 <img src="${post.image}" onclick="event.stopPropagation(); openImageModal(this.src)" referrerpolicy="no-referrer" alt="${post.vehicleType}" class="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-zoom-in" onerror="this.src='https://placehold.co/600x400/e2e8f0/gray?text=No+Image'"/>
@@ -434,6 +569,11 @@
                                     <span class="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/20">
                                         ${post.vehicleType}
                                     </span>
+                                </div>
+                                <div class="absolute top-3 right-3">
+                                    <button onclick="toggleFavorite(event, '${post.id}')" class="bg-white/80 hover:bg-white text-gray-400 p-2 rounded-full backdrop-blur-sm shadow-sm transition-all active:scale-90">
+                                        <i data-lucide="heart" width="18" class="${isFav ? 'heart-active' : ''}"></i>
+                                    </button>
                                 </div>
                                 <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent h-16"></div>
                                 <div class="absolute bottom-2 right-3 flex items-center gap-1 text-white text-xs font-bold bg-teal-500/90 px-2 py-0.5 rounded-md backdrop-blur-sm">
@@ -473,7 +613,7 @@
                                 </div>
                             </div>
                         </div>
-                    `).join('');
+                    `}).join('');
 
                     if (totalPages > 1) {
                         contentHtml += `
@@ -540,9 +680,14 @@
                 `;
             }
 
+            const isFav = state.favorites.some(p => p.id == post.id);
+
             container.innerHTML = `
                 <div class="relative h-72 bg-gray-200">
                     <button onclick="router.back()" class="absolute top-4 left-4 bg-white/90 backdrop-blur text-gray-800 p-2.5 rounded-full shadow-lg z-10 hover:bg-white transition-all active:scale-95"><i data-lucide="arrow-left" width="22"></i></button>
+                    <button onclick="toggleFavorite(event, '${post.id}'); selectPost('${post.id}');" class="absolute top-4 right-16 bg-white/90 backdrop-blur text-gray-400 p-2.5 rounded-full shadow-lg z-10 hover:bg-white transition-all active:scale-95">
+                        <i data-lucide="heart" width="20" class="${isFav ? 'heart-active' : ''}"></i>
+                    </button>
                     <button id="delete-btn" onclick="deletePost('${post.id}')" class="absolute top-4 right-4 bg-red-500/90 backdrop-blur text-white p-2.5 rounded-full shadow-lg z-10 hover:bg-red-600 transition-all active:scale-95"><i data-lucide="trash-2" width="20"></i></button>
                     <img src="${post.image}" onclick="openImageModal(this.src)" referrerpolicy="no-referrer" class="w-full h-full object-cover cursor-zoom-in" onerror="this.src='https://placehold.co/600x400/e2e8f0/gray?text=No+Image'"/>
                     <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-20 pb-6 px-5 text-white pointer-events-none">
@@ -749,6 +894,7 @@
                 populateProvinceFilter();
             } finally {
                 if(loader) loader.classList.add('hidden');
+                updateFavoriteBadge(); // Initial badge check
                 renderHome();
             }
         }

@@ -364,7 +364,6 @@
         }
 
         // --- ROUTER ---
-        // Router references functions, so functions must be declared (hoisted) or defined before calling navigate
         const router = {
             navigate: (viewId, data = null) => {
                 document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
@@ -383,7 +382,6 @@
         };
 
         // --- VIEW FUNCTIONS ---
-        // Explicitly defined here to be available for router
         function renderHome() {
             try {
                 const list = document.getElementById('post-list');
@@ -854,12 +852,6 @@
         document.getElementById('image-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if(file) {
-                // Fix 3: Image upload size check
-                if (file.size > 500000) {
-                    Swal.fire('ไฟล์ใหญ่ไป', 'ควรน้อยกว่า 500KB', 'warning');
-                    e.target.value = '';
-                    return;
-                }
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     createFormData.image = reader.result;
